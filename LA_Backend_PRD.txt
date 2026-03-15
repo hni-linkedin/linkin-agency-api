@@ -1,0 +1,617 @@
+LA
+LinkinAgency
+Backend API — Data Ingestion Service
+Product Requirements Document  —  v1.0
+
+Status
+Draft — Ready for Dev
+Version
+1.0.0
+Stack
+Node / Express / Mongo
+Storage
+Cloudinary
+
+1. Purpose & Scope
+This document defines the complete product requirements for the LinkinAgency Backend API — the server-side service that receives LinkedIn HTML captures from the Chrome extension, parses them into structured JSON using Cheerio, stores the JSON in MongoDB, and archives the raw HTML file to Cloudinary.
+
+
+Every section is written for an AI coding agent to implement directly. No requirement should require interpretation. Ambiguous cases are resolved in Section 11 (Open Questions).
+
+1.1 Responsibilities
+	•	Accept multipart/form-data POST requests from the Chrome extension
+	•	Validate the incoming payload — reject malformed or incomplete requests early
+	•	Upload the raw HTML file to Cloudinary under a structured folder path
+	•	Run the Cheerio parser against the HTML and produce a structured JSON object
+	•	Write a capture record to MongoDB containing: metadata, parsed JSON, Cloudinary file URL
+	•	Return a clear JSON response to the extension indicating success or failure
+
+1.2 Out of Scope
+	•	Authentication beyond API key header validation (OAuth deferred to V2)
+	•	Real-time webhooks or push notifications
+	•	Analytics computation or scoring (that is the AI pipeline's job, downstream)
+	•	Admin dashboard UI
+
+
+2. Technology Stack
+Layer
+Technology
+Rationale
+Runtime
+Node.js 20 LTS
+Long-term support, native ESM, fast startup
+Framework
+Express.js 4.x
+Minimal, well-understood, easy for agents to scaffold
+Database
+MongoDB via Mongoose 8.x
+Flexible schema for heterogeneous LinkedIn page types
+File Upload (receive)
+Multer (multipart middleware)
+Standard for handling file + field uploads in Express
+File Storage
+Cloudinary
+Free tier sufficient for HTML archives; CDN delivery; permanent URLs; good SDK
+HTML Parsing
+Cheerio 1.x
+jQuery-style DOM API; same logic as client-side parser
+Validation
+Zod 3.x
+Runtime schema validation for incoming payloads
+Environment
+dotenv
+Standard .env loading
+Dev tooling
+nodemon
+Auto-restart in development
+
+
+3. Project Folder Structure
+The backend lives inside a dedicated Backend/ folder in the monorepo root. No files from the backend should leak into the extension or parser modules.
+
+project-root/
+├── Extension/          ← Chrome extension (separate PRD)
+├── Parser/             ← Cheerio parser module
+└── Backend/            ← THIS SERVICE
+    ├── src/
+    │   ├── index.js              ← Express app entry point
+    │   ├── config/
+    │   │   ├── db.js             ← Mongoose connection
+    │   │   └── cloudinary.js     ← Cloudinary SDK init
+    │   ├── middleware/
+    │   │   ├── apiKey.js         ← API key auth middleware
+    │   │   ├── upload.js         ← Multer config
+    │   │   └── errorHandler.js   ← Global error handler
+    │   ├── routes/
+    │   │   └── capture.js        ← All /api/capture routes
+    │   ├── controllers/
+    │   │   └── captureController.js
+    │   ├── services/
+    │   │   ├── parserService.js  ← Cheerio parsing logic
+    │   │   └── cloudinaryService.js
+    │   ├── models/
+    │   │   └── Capture.js        ← Mongoose model
+    │   └── utils/
+    │       └── logger.js
+    ├── .env.example
+    ├── .gitignore
+    ├── package.json
+    └── README.md
+
+
+4. API Endpoints
+
+Method
+Path
+Description
+Auth
+POST
+/api/capture
+Receive HTML file + metadata, parse, store, upload
+API Key
+GET
+/api/capture
+List all captures (paginated, filterable)
+API Key
+GET
+/api/capture/:id
+Get a single capture by MongoDB _id
+API Key
+GET
+/api/capture/client/:clientId
+Get all captures for one client
+API Key
+DELETE
+/api/capture/:id
+Soft-delete a capture record
+API Key
+GET
+/health
+Health check — returns 200 + uptime
+None
+
+
+5. Primary Endpoint — POST /api/capture
+This is the core endpoint called by the Chrome extension after every HTML download. It must handle everything: receive, validate, upload, parse, store, respond.
+
+5.1 Request Format
+Content-Type: multipart/form-data
+
+Field
+Type
+Required
+Description
+Example
+htmlFile
+File
+required
+The raw HTML file captured from the LinkedIn page. Must be text/html. Max size 10MB.
+LA__Sapna__profile_main.html
+clientId
+String
+required
+Unique identifier for the client profile being captured. UUID or slug.
+client_sapna_nibsaiya
+pageType
+String
+required
+The page type label. Must match one of the allowed enum values (see 5.2).
+analytics_posts_impressions_90d
+capturedAt
+String
+required
+ISO 8601 timestamp of when the capture was triggered in the browser.
+2026-02-22T14:30:00.000Z
+tabUrl
+String
+required
+The exact URL of the LinkedIn tab when capture was triggered.
+https://www.linkedin.com/analytics/...
+clientName
+String
+optional
+Human-readable name of the client. Used for Cloudinary folder naming.
+Dr Sapna Nibsaiya
+notes
+String
+optional
+Free-text field for team notes about this capture session.
+Baseline capture — pilot start
+agentVersion
+String
+optional
+Version string of the Chrome extension that sent this request.
+2.0.0
+
+5.2 pageType Enum — Allowed Values
+The pageType field must be one of the following exact strings. Any other value returns a 400 error.
+
+pageType Value
+Maps To
+analytics_posts_impressions_7d
+Analytics → Posts → Impressions (7 days)
+analytics_posts_impressions_28d
+Analytics → Posts → Impressions (28 days)
+analytics_posts_impressions_90d
+Analytics → Posts → Impressions (90 days)
+analytics_posts_engagements_28d
+Analytics → Posts → Engagements (28 days)
+analytics_posts_engagements_90d
+Analytics → Posts → Engagements (90 days)
+analytics_audience
+Analytics → Audience → Followers
+analytics_search_appearances
+Analytics → Search Appearances
+analytics_profile_views
+Analytics → Profile Views
+profile_main
+Client Profile page (/in/username)
+network_connections
+Connections list
+network_following
+Following list (Manage Follows)
+feed
+Live LinkedIn feed
+
+5.3 Processing Pipeline (in order)
+	•	Validate API key from x-api-key header — reject 401 if missing or invalid
+	•	Receive multipart request via Multer — store file in memory buffer (not disk)
+	•	Validate all required fields via Zod schema — reject 400 with field errors if invalid
+	•	Validate file MIME type is text/html and size ≤ 10MB — reject 422 if not
+	•	Upload HTML buffer to Cloudinary — get back secure URL and public_id
+	•	Run Cheerio parser on HTML buffer — produce parsedData JSON object
+	•	Build Mongoose Capture document from all fields + cloudinaryUrl + parsedData
+	•	Save Capture document to MongoDB
+	•	Return 201 response with capture _id, cloudinaryUrl, parsedData summary
+
+5.4 Response Shape
+
+Code
+When
+Response Body Shape
+201
+All steps succeed
+{ success: true, captureId, cloudinaryUrl, pageType, parsedAt, summary: { postImpressions, followers, topPostCount } }
+400
+Missing required fields or invalid pageType enum
+{ success: false, error: 'Validation failed', details: [{ field, message }] }
+401
+Missing or wrong x-api-key header
+{ success: false, error: 'Unauthorized' }
+413
+HTML file exceeds 10MB
+{ success: false, error: 'File too large. Max 10MB.' }
+422
+File is not text/html
+{ success: false, error: 'Invalid file type. Expected text/html.' }
+500
+Cloudinary upload failed, DB write failed, or parse threw
+{ success: false, error: 'Internal server error', code: 'CLOUDINARY_UPLOAD_FAILED | DB_WRITE_FAILED | PARSE_ERROR' }
+
+
+6. Cloudinary Integration
+
+
+Cloudinary is chosen over ImageKit for this use case. Reason: Cloudinary's Node SDK supports raw file upload (not just images) with a simple upload_stream API, has a generous free tier (25GB storage, 25GB monthly bandwidth), and returns stable permanent HTTPS URLs immediately. ImageKit requires additional raw media configuration that adds setup friction.
+
+6.1 Folder Structure on Cloudinary
+All uploads must follow this path convention. Never upload to the root.
+
+linkinagency/
+└── clients/
+    └── {clientId}/
+        └── {pageType}/
+            └── {YYYY-MM-DD}/
+                └── {capturedAt-timestamp}.html
+
+Example:
+linkinagency/clients/client_sapna_nibsaiya/analytics_posts_impressions_90d/2026-02-22/1708608600000.html
+
+6.2 Upload Configuration
+Use the following Cloudinary upload options on every request:
+
+Option
+Value
+Reason
+resource_type
+raw
+HTML is not an image/video — must use raw or Cloudinary rejects it
+format
+html
+Forces .html extension on the stored file
+folder
+linkinagency/clients/{clientId}/...
+Keeps files organised by client and page type
+public_id
+{capturedAt timestamp}
+Unique, sortable filename
+overwrite
+false
+Never overwrite existing captures
+use_filename
+false
+Use our generated public_id, not the original filename
+
+6.3 Error Handling for Cloudinary
+	•	If Cloudinary upload fails for any reason — return 500 with code CLOUDINARY_UPLOAD_FAILED
+	•	Do NOT proceed to save the MongoDB record if Cloudinary fails
+	•	Log the full Cloudinary error object to the logger
+	•	Include the Cloudinary error message in the server log but NOT in the API response
+
+
+7. Parser Service — Cheerio
+The parser service receives the HTML buffer as a string and returns a structured JSON object. It must not throw — all errors must be caught internally and returned as a partial object with a parse_error field.
+
+7.1 Parser Input
+	•	Input: UTF-8 string of the HTML file contents
+	•	Input: pageType string (to select the correct parsing strategy)
+
+7.2 Parser Output — Shape
+The parser always returns an object with this top-level shape:
+
+{
+  pageType:    String,          // echoed from input
+  parsedAt:    ISO String,       // timestamp of parse execution
+  parse_error: String | null,    // null if successful, error message if partial
+  data:        Object            // page-type-specific payload (see 7.3)
+}
+
+7.3 data Object — Per Page Type
+
+profile_main
+
+{
+  name:           String,
+  headline:       String,
+  location:       String,
+  company:        String,
+  followers:      Number,
+  connections:    Number | null,
+  about:          String,
+  profileViews:   Number | null,   // from sidebar widget
+  postImpressions:Number | null,   // from sidebar widget
+  searchApps:     Number | null,   // from sidebar widget
+  recentPosts: [{
+    urn:       String,
+    text:      String,
+    reactions: Number | null,
+    comments:  Number | null,
+  }]
+}
+
+analytics_posts_impressions_* / analytics_posts_engagements_*
+
+{
+  mainMetric:      Number,    // big headline number
+  mainDelta:       Number,    // % vs prior period
+  impressions:     Number | null,
+  impressionsDelta:Number | null,
+  membersReached:  Number | null,
+  membersDelta:    Number | null,
+  reactions:       Number | null,   // engagements tab only
+  comments:        Number | null,
+  reposts:         Number | null,
+  saves:           Number | null,
+  sends:           Number | null,
+  topPosts: [{
+    activityId: String,
+    postUrl:    String,
+    postType:   String,
+    text:       String,
+    reactions:  Number | null,
+    comments:   Number | null,
+    reposts:    Number | null,
+    impressions:Number | null,
+  }]
+}
+
+analytics_audience
+
+{
+  totalFollowers:  Number,
+  followersDelta:  Number | null,
+  newFollowers:    Number | null,
+  demographics: {
+    topLocations:     [{ label: String, percentage: Number }],
+    experienceLevels: [{ label: String, percentage: Number }],
+    companySizes:     [{ label: String, percentage: Number }],
+    topIndustries:    [{ label: String, percentage: Number }],
+    topJobTitles:     [{ label: String, percentage: Number }],
+  }
+}
+
+analytics_search_appearances
+
+{
+  totalAppearances:    Number,
+  delta:               Number | null,
+  whereYouAppeared: {
+    posts:                  Number | null,
+    networkRecommendations: Number | null,
+    comments:               Number | null,
+    search:                 Number | null,
+  },
+  topSearcherCompanies: [{ label: String, value: Number | null }],
+  topSearcherTitles:    [{ label: String, value: Number | null }],
+  titlesFoundFor:       [{ label: String, value: Number | null }],
+}
+
+7.4 Parser Rules
+	•	The parser must never throw an uncaught exception
+	•	If a selector finds nothing, return null for that field — do not return undefined
+	•	If the entire parse fails, return the top-level object with parse_error set and data as an empty object {}
+	•	Numbers must be returned as JavaScript Numbers (not strings) — strip commas before parsing
+	•	Percentages are returned as the numeric value only — e.g. 72.6, not '72.6%'
+	•	Text fields are trimmed and whitespace-collapsed before storage
+	•	Post text is capped at 500 characters
+	•	Demographics arrays are capped at 10 items each
+	•	topPosts array is capped at 20 items
+
+
+8. MongoDB Schema — Capture Model
+Collection name: captures
+
+Field
+Type
+Index
+Description
+_id
+ObjectId
+primary
+Auto-generated MongoDB ID
+clientId
+String
+index
+Required. Client identifier. Used to query all captures per client.
+clientName
+String
+none
+Optional. Human-readable client name for display.
+pageType
+String
+index
+Required. Enum — one of the 12 allowed values.
+capturedAt
+Date
+index, desc
+Required. When the browser capture was triggered. Stored as Date.
+tabUrl
+String
+none
+Required. Exact LinkedIn URL at time of capture.
+cloudinaryUrl
+String
+none
+Required. Permanent HTTPS URL of the raw HTML file on Cloudinary.
+cloudinaryId
+String
+none
+Cloudinary public_id for deletion / management.
+parsedData
+Mixed
+none
+Required. Full parsed JSON object from the Cheerio parser.
+parseSuccess
+Boolean
+index
+true if parsedData.parse_error is null. Allows querying failed parses.
+agentVersion
+String
+none
+Optional. Chrome extension version that sent this capture.
+notes
+String
+none
+Optional. Free-text notes from team.
+deleted
+Boolean
+index
+Soft delete flag. Default false. Deleted records are excluded from all queries.
+createdAt
+Date
+auto
+Mongoose timestamps: true — set automatically on insert.
+updatedAt
+Date
+auto
+Mongoose timestamps: true — set automatically on update.
+
+
+Always filter with { deleted: false } in all GET queries. Deleted records must never appear in list or detail endpoints.
+
+
+9. Authentication
+V1 uses a static API key passed in the x-api-key request header. This is sufficient for an internal tool used by the LinkinAgency team only.
+
+Implementation
+	•	API_KEY value is set in the .env file
+	•	The apiKey.js middleware compares req.headers['x-api-key'] against process.env.API_KEY
+	•	If missing or mismatch — return 401 immediately, do not proceed
+	•	Apply this middleware to all /api/* routes
+	•	The /health endpoint is public — no API key required
+
+
+Never log the API key value. If the key is compromised, rotate it in .env and restart the server. V2 will add per-client OAuth tokens.
+
+
+10. Environment Variables — .env.example
+The following .env.example file must exist at Backend/.env.example. The agent must not hardcode any of these values.
+
+# ─────────────────────────────────────────────────────
+# LinkinAgency Backend — Environment Variables
+# Copy this file to .env and fill in your values
+# NEVER commit .env to git
+# ─────────────────────────────────────────────────────
+
+# Server
+PORT=3001
+NODE_ENV=development
+
+# API Key (generate a random 32+ char string)
+API_KEY=your_secret_api_key_here
+
+# MongoDB
+MONGODB_URI=mongodb://localhost:27017/linkinagency
+# For Atlas: mongodb+srv://user:password@cluster.mongodb.net/linkinagency
+
+# Cloudinary
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_cloudinary_api_key
+CLOUDINARY_API_SECRET=your_cloudinary_api_secret
+
+# Upload limits
+MAX_FILE_SIZE_MB=10
+
+
+11. Cloudinary Setup — README
+This section is the complete Cloudinary onboarding guide for a new developer setting up the backend for the first time.
+
+Step 1 — Create a Free Cloudinary Account
+	•	Go to cloudinary.com/users/register/free
+	•	Sign up with Google or email
+	•	Choose 'Programmable Media' as your use case
+	•	After signup you land on the Dashboard
+
+Step 2 — Get Your Credentials
+	•	On the Cloudinary Dashboard, look for the 'API Keys' section
+	•	You will see three values: Cloud Name, API Key, API Secret
+	•	Copy all three into your Backend/.env file under the CLOUDINARY_* keys
+
+
+The API Secret is shown only once in some flows. Copy it immediately and store it in your .env. Never paste it in Slack or commit it to git.
+
+Step 3 — Configure Upload Preset (Optional but Recommended)
+	•	In the Cloudinary Dashboard → Settings → Upload → Upload Presets
+	•	Click 'Add upload preset'
+	•	Set Signing Mode to 'Signed'
+	•	Set Folder to 'linkinagency'
+	•	Set Resource Type to 'Raw'
+	•	Save the preset name — you can pass it as the upload_preset option in the SDK
+
+Step 4 — Install the Cloudinary SDK
+npm install cloudinary
+
+Step 5 — Initialise in config/cloudinary.js
+const { v2: cloudinary } = require('cloudinary');
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key:    process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+  secure:     true,
+});
+
+module.exports = cloudinary;
+
+Step 6 — Upload an HTML File (Stream Pattern)
+Multer stores the file in memory as a Buffer. Use an upload stream to send it to Cloudinary without writing to disk:
+
+const { Readable } = require('stream');
+
+function uploadHtmlToCloudinary(buffer, options) {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      { resource_type: 'raw', format: 'html', ...options },
+      (error, result) => {
+        if (error) reject(error);
+        else resolve(result);
+      }
+    );
+    Readable.from(buffer).pipe(stream);
+  });
+}
+
+Step 7 — Verify Upload
+	•	After running the server and sending a test capture, open Cloudinary Dashboard → Media Library
+	•	Navigate to linkinagency/clients/... and confirm the HTML file is stored there
+	•	Copy the Secure URL and paste it in a browser — you should see the raw HTML
+
+
+12. Error Handling — Global Rules
+	•	All route handlers must be wrapped in try/catch or use an async wrapper middleware
+	•	Unhandled errors bubble to the global errorHandler.js middleware
+	•	errorHandler always returns JSON — never raw Express HTML error pages
+	•	All errors are logged with: timestamp, route, error code, error message, stack trace (dev only)
+	•	5xx errors must not expose internal implementation details in the response body
+	•	4xx errors must include actionable detail — which field failed, what was expected
+
+
+13. Acceptance Criteria
+The backend is complete when ALL of the following pass:
+
+	•	POST /api/capture with valid multipart payload returns 201 and a captureId
+	•	The HTML file appears in the correct Cloudinary folder path (as per Section 6.1)
+	•	The Capture document in MongoDB contains cloudinaryUrl, parsedData, and parseSuccess: true
+	•	POST /api/capture with missing clientId returns 400 with field-level error details
+	•	POST /api/capture with wrong x-api-key returns 401
+	•	POST /api/capture with a 12MB file returns 413
+	•	POST /api/capture with a .pdf file returns 422
+	•	GET /api/capture/client/{clientId} returns only records for that client, excluding deleted ones
+	•	DELETE /api/capture/:id sets deleted: true but does not remove the document from MongoDB
+	•	GET /health returns 200 with { status: 'ok', uptime: Number }
+	•	If the Cheerio parser cannot extract the main metric, parsedData.parse_error is non-null and parseSuccess is false — but the record is still saved
+	•	Sending two identical captures (same clientId, pageType, capturedAt) stores two separate records — no deduplication in V1
+
+
+
+End of Document  —  LinkinAgency Backend PRD v1.0
