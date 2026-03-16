@@ -73,10 +73,22 @@ const createCapture = async (req, res, next) => {
         // 5. Build summary
         let summary = {};
         if (data.pageType === 'profile_main') {
+            const d = parseResult.data;
             summary = {
-                postImpressions: parseResult.data.postImpressions,
-                followers: parseResult.data.followers,
-                topPostCount: parseResult.data.recentPosts?.length || 0
+                profileName: d.profileName ?? null,
+                headline: d.headline ?? null,
+                location: d.location ?? null,
+                about: d.about ? (d.about.length > 200 ? d.about.slice(0, 200) + '…' : d.about) : null,
+                topSkills: d.topSkills ?? null,
+                experienceCount: Array.isArray(d.experience) ? d.experience.length : 0,
+                experience: Array.isArray(d.experience) ? d.experience.slice(0, 5) : [],
+            };
+        } else if (data.pageType === 'network_connections') {
+            const d = parseResult.data;
+            summary = {
+                connectionCount: Array.isArray(d.connections) ? d.connections.length : 0,
+                totalCount: d.totalCount ?? null,
+                connections: (d.connections || []).slice(0, 5),
             };
         } else if (data.pageType.includes('impressions')) {
             summary = {
@@ -149,6 +161,30 @@ const getCaptureById = async (req, res, next) => {
             return res.status(404).json({ success: false, error: 'Capture not found' });
         }
         res.json({ success: true, data: capture });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// GET /api/capture/profile/:clientId – latest profile_main parsed data for frontend
+const getProfileByClient = async (req, res, next) => {
+    try {
+        const capture = await Capture.findOne({
+            clientId: req.params.clientId,
+            pageType: 'profile_main',
+            deleted: false,
+        }).sort({ capturedAt: -1 });
+
+        if (!capture) {
+            return res.status(404).json({ success: false, error: 'Profile capture not found' });
+        }
+
+        res.json({
+            success: true,
+            data: capture.parsedData?.data || null,
+            capturedAt: capture.capturedAt,
+            captureId: capture._id,
+        });
     } catch (error) {
         next(error);
     }
@@ -436,6 +472,7 @@ module.exports = {
     createCapture,
     listCaptures,
     getCaptureById,
+    getProfileByClient,
     getCapturesByClient,
     getImpressionsByClient,
     getEngagementsByClient,

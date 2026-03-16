@@ -6,6 +6,7 @@ const {
     createCapture,
     listCaptures,
     getCaptureById,
+    getProfileByClient,
     getCapturesByClient,
     getImpressionsByClient,
     getEngagementsByClient,
@@ -21,6 +22,7 @@ router.use(apiKeyAuth);
 
 router.post('/', upload.single('htmlFile'), createCapture);
 router.get('/', listCaptures);
+router.get('/profile/:clientId', getProfileByClient);
 router.get('/:id', getCaptureById);
 router.get('/client/:clientId', getCapturesByClient);
 router.get('/impressions/:clientId', getImpressionsByClient);
