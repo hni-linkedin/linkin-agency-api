@@ -92,8 +92,16 @@ const createCapture = async (req, res, next) => {
             };
         } else if (data.pageType === 'analytics_search_appearances') {
             summary = {
-                topJobTitle: parseResult.data.job_title?.[0]?.title || 'N/A'
+                topJobTitle: parseResult.data.topSearcherTitles?.[0]?.label || parseResult.data.titlesFoundFor?.[0]?.label || 'N/A'
             };
+        } else if (data.pageType === 'analytics_search_appearances_where') {
+            summary = { totalAppearances: parseResult.data.totalAppearances, delta: parseResult.data.delta };
+        } else if (data.pageType === 'analytics_search_appearances_companies') {
+            summary = { count: parseResult.data.topSearcherCompanies?.length ?? 0 };
+        } else if (data.pageType === 'analytics_search_appearances_titles') {
+            summary = { count: parseResult.data.topSearcherTitles?.length ?? 0 };
+        } else if (data.pageType === 'analytics_search_appearances_found_for') {
+            summary = { count: parseResult.data.titlesFoundFor?.length ?? 0 };
         }
 
         // Return 201 response
@@ -231,12 +239,19 @@ const getAudienceByClient = async (req, res, next) => {
     }
 };
 
-// GET /api/capture/demographics/:clientId
+const SEARCH_APPEARANCE_PAGE_TYPES = [
+    'analytics_search_appearances_where',
+    'analytics_search_appearances_companies',
+    'analytics_search_appearances_titles',
+    'analytics_search_appearances_found_for'
+];
+
+// GET /api/capture/demographics/:clientId (search appearance sections)
 const getDemographicsByClient = async (req, res, next) => {
     try {
         const captures = await Capture.find({
             clientId: req.params.clientId,
-            pageType: 'analytics_search_appearances',
+            pageType: { $in: SEARCH_APPEARANCE_PAGE_TYPES },
             deleted: false
         }).sort({ capturedAt: -1 });
         res.json({ success: true, count: captures.length, data: captures });
@@ -250,16 +265,28 @@ const getSummaryByClient = async (req, res, next) => {
     try {
         const { clientId } = req.params;
 
-        // Fetch specific page types exactly as required by PRD home page cards
-        const [profile, impressions7d, impressions28d, engagements28d, audience, search, views] = await Promise.all([
+        // Fetch specific page types; search appearances = 4 section types combined
+        const [profile, impressions7d, impressions28d, engagements28d, audience, searchWhere, searchCompanies, searchTitles, searchFoundFor, views] = await Promise.all([
             Capture.findOne({ clientId, pageType: 'profile_main', deleted: false }).sort({ capturedAt: -1 }),
             Capture.findOne({ clientId, pageType: 'analytics_posts_impressions_7d', deleted: false }).sort({ capturedAt: -1 }),
             Capture.findOne({ clientId, pageType: 'analytics_posts_impressions_28d', deleted: false }).sort({ capturedAt: -1 }),
             Capture.findOne({ clientId, pageType: 'analytics_posts_engagements_28d', deleted: false }).sort({ capturedAt: -1 }),
             Capture.findOne({ clientId, pageType: 'analytics_audience', deleted: false }).sort({ capturedAt: -1 }),
-            Capture.findOne({ clientId, pageType: 'analytics_search_appearances', deleted: false }).sort({ capturedAt: -1 }),
+            Capture.findOne({ clientId, pageType: 'analytics_search_appearances_where', deleted: false }).sort({ capturedAt: -1 }),
+            Capture.findOne({ clientId, pageType: 'analytics_search_appearances_companies', deleted: false }).sort({ capturedAt: -1 }),
+            Capture.findOne({ clientId, pageType: 'analytics_search_appearances_titles', deleted: false }).sort({ capturedAt: -1 }),
+            Capture.findOne({ clientId, pageType: 'analytics_search_appearances_found_for', deleted: false }).sort({ capturedAt: -1 }),
             Capture.findOne({ clientId, pageType: 'analytics_profile_views', deleted: false }).sort({ capturedAt: -1 })
         ]);
+
+        const search = [searchWhere, searchCompanies, searchTitles, searchFoundFor].some(c => c?.parsedData?.data)
+            ? {
+                where: searchWhere?.parsedData?.data || null,
+                companies: searchCompanies?.parsedData?.data?.topSearcherCompanies ?? null,
+                titles: searchTitles?.parsedData?.data?.topSearcherTitles ?? null,
+                foundFor: searchFoundFor?.parsedData?.data?.titlesFoundFor ?? null
+            }
+            : null;
 
         const summary = {
             profile: profile?.parsedData?.data || null,
@@ -276,7 +303,7 @@ const getSummaryByClient = async (req, res, next) => {
                 top_posts: engagements28d.parsedData.data.top_posts
             } : null,
             audience: audience?.parsedData?.data || null,
-            search: search?.parsedData?.data || null,
+            search,
             profileViews: views?.parsedData?.data || null,
             lastCapturedAt: profile?.capturedAt || impressions28d?.capturedAt || impressions7d?.capturedAt || new Date()
         };
@@ -305,7 +332,7 @@ const getHomeDataByClient = async (req, res, next) => {
             { $replaceRoot: { newRoot: '$latestCapture' } }
         ];
 
-        // Fetch everything in parallel
+        // Fetch everything in parallel; search = 4 section types
         const [
             freshnessData,
             profile,
@@ -319,7 +346,10 @@ const getHomeDataByClient = async (req, res, next) => {
             audience7d,
             audience28d,
             audience90d,
-            search,
+            searchWhere,
+            searchCompanies,
+            searchTitles,
+            searchFoundFor,
             views
         ] = await Promise.all([
             Capture.aggregate(freshnessPipeline),
@@ -334,7 +364,10 @@ const getHomeDataByClient = async (req, res, next) => {
             Capture.findOne({ clientId, pageType: 'analytics_audience_7d', deleted: false }).sort({ capturedAt: -1 }),
             Capture.findOne({ clientId, pageType: 'analytics_audience_28d', deleted: false }).sort({ capturedAt: -1 }),
             Capture.findOne({ clientId, pageType: 'analytics_audience_90d', deleted: false }).sort({ capturedAt: -1 }),
-            Capture.findOne({ clientId, pageType: 'analytics_search_appearances', deleted: false }).sort({ capturedAt: -1 }),
+            Capture.findOne({ clientId, pageType: 'analytics_search_appearances_where', deleted: false }).sort({ capturedAt: -1 }),
+            Capture.findOne({ clientId, pageType: 'analytics_search_appearances_companies', deleted: false }).sort({ capturedAt: -1 }),
+            Capture.findOne({ clientId, pageType: 'analytics_search_appearances_titles', deleted: false }).sort({ capturedAt: -1 }),
+            Capture.findOne({ clientId, pageType: 'analytics_search_appearances_found_for', deleted: false }).sort({ capturedAt: -1 }),
             Capture.findOne({ clientId, pageType: 'analytics_profile_views', deleted: false }).sort({ capturedAt: -1 })
         ]);
 
@@ -343,6 +376,15 @@ const getHomeDataByClient = async (req, res, next) => {
             const { top_posts, ...rest } = data;
             return rest;
         };
+
+        const search = [searchWhere, searchCompanies, searchTitles, searchFoundFor].some(c => c?.parsedData?.data)
+            ? {
+                where: searchWhere?.parsedData?.data || null,
+                companies: searchCompanies?.parsedData?.data?.topSearcherCompanies ?? null,
+                titles: searchTitles?.parsedData?.data?.topSearcherTitles ?? null,
+                foundFor: searchFoundFor?.parsedData?.data?.titlesFoundFor ?? null
+            }
+            : null;
 
         const summary = {
             profile: profile?.parsedData?.data || null,
@@ -356,7 +398,7 @@ const getHomeDataByClient = async (req, res, next) => {
             audience7d: audience7d?.parsedData?.data || null,
             audience28d: audience28d?.parsedData?.data || null,
             audience90d: audience90d?.parsedData?.data || null,
-            search: search?.parsedData?.data || null,
+            search,
             profileViews: views?.parsedData?.data || null,
             topPosts: impressions28d?.parsedData?.data?.top_posts ?? null,
             lastCapturedAt: profile?.capturedAt || impressions28d?.capturedAt || impressions7d?.capturedAt || new Date()

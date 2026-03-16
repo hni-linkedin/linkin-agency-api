@@ -62,7 +62,7 @@ All `/api/capture` routes require API key (e.g. `x-api-key` header).
 | **analytics_posts_engagements_7d / 28d / 90d** | `engagements: { totalEngagements, deltaChange, deltaColor }`, `engagements_split: { reactions?, comments?, reposts?, saves?, sendsOnLinkedIn? }`, `visitsToLinks`, `top_posts[]` (same shape as impressions) |
 | **analytics_audience** (+ _7d/_28d/_90d) | `followers: { totalFollowers, deltaChange, deltaColor }`, `insights: { experience, location, industry }` each `{ name, percentage }` |
 | **analytics_audience_demographics** | `job_title[]`, `location[]`, `industry[]`, `seniority[]`, `company_size[]`, `company[]` — each item `{ title, percentage }` (top 5; company = all) |
-| **analytics_search_appearances** | `totalAppearances`, `delta`, `whereYouAppeared: { posts, networkRecommendations, comments, search }`, `topSearcherCompanies[]`, `topSearcherTitles[]`, `titlesFoundFor[]` — items `{ label, value }` |
+| **analytics_search_appearances** | `totalAppearances`, `delta`, `whereYouAppeared: { posts, networkRecommendations, comments, search }`, `topSearcherCompanies[]`, `topSearcherTitles[]`, `titlesFoundFor[]` — companies items `{ label, image }`, titles `{ label }` |
 | **analytics_profile_views** | `totalViews`, `delta`, `viewers[]: { name, headline, avatar }` |
 | **network_connections / network_following / feed** | `data: {}` (no parsing) |
 

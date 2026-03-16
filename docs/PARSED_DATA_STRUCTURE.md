@@ -150,7 +150,7 @@ data: {
     comments: number;
     search: number;
   };
-  topSearcherCompanies: Array<{ label: string; value: string }>;
+  topSearcherCompanies: Array<{ label: string; image: string | null }>;
   topSearcherTitles:    Array<{ label: string; value: string }>;
   titlesFoundFor:       Array<{ label: string; value: string }>;   // keywords
 }

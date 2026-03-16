@@ -4,7 +4,10 @@ const { extractImpressions } = require('./extractImpressions');
 const { extractEngagements } = require('./extractEngagements');
 const { extractAudience } = require('./extractAudience');
 const { extractDemographics } = require('./extractDemographics');
-const { extractSearchAppearances } = require('./extractSearchAppearances');
+const { extractSearchAppearancesWhere } = require('./extractSearchAppearancesWhere');
+const { extractSearchAppearancesCompanies } = require('./extractSearchAppearancesCompanies');
+const { extractSearchAppearancesTitles } = require('./extractSearchAppearancesTitles');
+const { extractSearchAppearancesFoundFor } = require('./extractSearchAppearancesFoundFor');
 const { extractProfileViews } = require('./extractProfileViews');
 
 /**
@@ -50,8 +53,17 @@ const parseHtml = (htmlString, pageType) => {
             case 'analytics_audience_demographics':
                 result.data = extractDemographics($);
                 break;
-            case 'analytics_search_appearances':
-                result.data = extractSearchAppearances($);
+            case 'analytics_search_appearances_where':
+                result.data = extractSearchAppearancesWhere($);
+                break;
+            case 'analytics_search_appearances_companies':
+                result.data = extractSearchAppearancesCompanies($);
+                break;
+            case 'analytics_search_appearances_titles':
+                result.data = extractSearchAppearancesTitles($);
+                break;
+            case 'analytics_search_appearances_found_for':
+                result.data = extractSearchAppearancesFoundFor($);
                 break;
             case 'analytics_profile_views':
                 result.data = extractProfileViews($);
