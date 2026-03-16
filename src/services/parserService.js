@@ -9,6 +9,8 @@ const { extractSearchAppearancesCompanies } = require('./extractSearchAppearance
 const { extractSearchAppearancesTitles } = require('./extractSearchAppearancesTitles');
 const { extractSearchAppearancesFoundFor } = require('./extractSearchAppearancesFoundFor');
 const { extractProfileViews } = require('./extractProfileViews');
+const { extractProfile } = require('./extractProfile');
+const { extractConnections } = require('./extractConnections');
 
 /**
  * 7.4 Parser Rules
@@ -68,6 +70,9 @@ const parseHtml = (htmlString, pageType) => {
             case 'analytics_profile_views':
                 result.data = extractProfileViews($);
                 break;
+            case 'network_connections':
+                result.data = extractConnections($);
+                break;
             default:
                 // Other types returns empty data
                 break;
@@ -94,19 +99,7 @@ const parseNumber = (str) => {
 // --- Parsers logic implementation ---
 
 const parseProfileMain = ($) => {
-    return {
-        name: $('h1').first().text().trim() || '',
-        headline: '',
-        location: '',
-        company: '',
-        followers: 0,
-        connections: null,
-        about: '',
-        profileViews: null,
-        postImpressions: null,
-        searchApps: null,
-        recentPosts: []
-    };
+    return extractProfile($);
 };
 
 const parseAnalyticsPosts = ($, pageType) => {
