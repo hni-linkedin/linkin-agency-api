@@ -83,12 +83,24 @@ const createCapture = async (req, res, next) => {
                 experienceCount: Array.isArray(d.experience) ? d.experience.length : 0,
                 experience: Array.isArray(d.experience) ? d.experience.slice(0, 5) : [],
             };
-        } else if (data.pageType === 'network_connections' || data.pageType === 'network_followers' || data.pageType === 'network_following') {
+        } else if (data.pageType === 'network_connections') {
             const d = parseResult.data;
             summary = {
                 connectionCount: Array.isArray(d.connections) ? d.connections.length : 0,
                 totalCount: d.totalCount ?? null,
                 connections: (d.connections || []).slice(0, 5),
+            };
+        } else if (data.pageType === 'network_following') {
+            const d = parseResult.data;
+            summary = {
+                followingCount: Array.isArray(d.following) ? d.following.length : 0,
+                following: (d.following || []).slice(0, 5),
+            };
+        } else if (data.pageType === 'network_followers') {
+            const d = parseResult.data;
+            summary = {
+                followerCount: Array.isArray(d.followers) ? d.followers.length : 0,
+                followers: (d.followers || []).slice(0, 5),
             };
         } else if (data.pageType.includes('impressions')) {
             summary = {
