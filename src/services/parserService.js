@@ -71,6 +71,8 @@ const parseHtml = (htmlString, pageType) => {
                 result.data = extractProfileViews($);
                 break;
             case 'network_connections':
+            case 'network_followers':
+            case 'network_following':
                 result.data = extractConnections($);
                 break;
             default:

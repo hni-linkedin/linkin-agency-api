@@ -1,18 +1,19 @@
 /**
  * LinkedIn connections / My Network page HTML parser (Cheerio).
- * Extracts: connections list (name, headline, profileUrl), totalCount when visible.
+ * Extracts: connections list (name, headline, profileUrl, image), totalCount when visible.
  * Used for pageType: network_connections.
  */
 
 /**
  * @param {ReturnType<import('cheerio').load>} $
- * @returns {{ connections: Array<{ name: string, headline: string, profileUrl: string | null }>, totalCount: number | null }}
+ * @returns {{ connections: Array<{ name: string, headline: string, profileUrl: string | null, image: string | null }>, totalCount: number | null }}
  */
 function extractConnections($) {
     const connections = [];
     const seenUrls = new Set();
+    const urlToImage = new Map();
 
-    const push = (name, headline, profileUrl) => {
+    const push = (name, headline, profileUrl, image) => {
         const url = (profileUrl || '').trim().split('?')[0] || null;
         if (!name) return;
         const key = url || name;
@@ -22,25 +23,47 @@ function extractConnections($) {
             name: name.trim(),
             headline: (headline || '').trim() || null,
             profileUrl: url,
+            image: (image || '').trim() || null,
         });
     };
 
-    // 1. Connection cards: a.mn-connection-card__link or similar
+    // 0. Collect profile image URLs from avatar links (a[href*="/in/"] that contain img)
+    $('a[href*="/in/"]').each((i, el) => {
+        const a = $(el);
+        const href = a.attr('href') || '';
+        if (!/\/in\/[a-zA-Z0-9-]+\/?/.test(href)) return;
+        const img = a.find('img').first();
+        if (!img.length) return;
+        const src = (img.attr('src') || img.attr('data-src') || img.attr('data-delayed-url') || '').trim();
+        if (!src) return;
+        const url = href.trim().split('?')[0] || '';
+        if (url && !urlToImage.has(url)) urlToImage.set(url, src);
+    });
+
+    // 1. Connection cards: prefer links that contain name + headline as separate <p> (current LinkedIn DOM)
     $('a[href*="/in/"]').each((i, el) => {
         const a = $(el);
         const href = a.attr('href') || '';
         if (!/\/in\/[a-zA-Z0-9-]+\/?/.test(href)) return;
 
-        const card = a.closest('.mn-connection-card, .entity-result, [class*="connection"], li');
-        const name =
-            card.find('.mn-connection-card__name, .artdeco-entity-lockup__title, .entity-result__title-text a, [class*="name"]').first().text().trim() ||
-            a.find('.mn-connection-card__name, .artdeco-entity-lockup__title').text().trim() ||
-            a.text().trim().split('\n')[0].trim();
-        const headline =
-            card.find('.mn-connection-card__link, .artdeco-entity-lockup__subtitle, .entity-result__primary-subtitle').first().text().trim() ||
-            a.siblings().filter('.artdeco-entity-lockup__subtitle, [class*="subtitle"]').first().text().trim();
+        const ps = a.find('p');
+        let name = '';
+        let headline = null;
 
-        if (name && name.length < 100) push(name, headline, href);
+        if (ps.length >= 2) {
+            name = ps.eq(0).text().trim();
+            headline = ps.eq(1).text().trim() || null;
+        } else if (ps.length === 1) {
+            name = ps.eq(0).text().trim();
+        } else {
+            // No <p> (e.g. avatar-only link); skip so we use the name-block link (with 2 <p>) for this profile
+            return;
+        }
+
+        if (name && name.length < 100) {
+            const url = href.trim().split('?')[0] || null;
+            push(name, headline, href, url ? urlToImage.get(url) : null);
+        }
     });
 
     // 2. Artdeco entity lockups (e.g. list of people)
@@ -50,7 +73,9 @@ function extractConnections($) {
             const name = lockup.find('.artdeco-entity-lockup__title').text().trim();
             const headline = lockup.find('.artdeco-entity-lockup__subtitle').text().trim();
             const link = lockup.find('a[href*="/in/"]').attr('href') || null;
-            push(name, headline, link);
+            const img = lockup.find('img').first();
+            const image = img.length ? (img.attr('src') || img.attr('data-src') || '').trim() || null : null;
+            push(name, headline, link, image);
         });
     }
 
@@ -62,7 +87,9 @@ function extractConnections($) {
             const name = titleEl.text().trim() || item.find('.entity-result__title-text').text().trim();
             const headline = item.find('.entity-result__primary-subtitle, .entity-result__summary').first().text().trim();
             const profileUrl = titleEl.attr('href') || item.find('a[href*="/in/"]').first().attr('href') || null;
-            push(name, headline, profileUrl);
+            const img = item.find('img').first();
+            const image = img.length ? (img.attr('src') || img.attr('data-src') || '').trim() || null : null;
+            push(name, headline, profileUrl, image);
         });
     }
 

@@ -83,7 +83,7 @@ const createCapture = async (req, res, next) => {
                 experienceCount: Array.isArray(d.experience) ? d.experience.length : 0,
                 experience: Array.isArray(d.experience) ? d.experience.slice(0, 5) : [],
             };
-        } else if (data.pageType === 'network_connections') {
+        } else if (data.pageType === 'network_connections' || data.pageType === 'network_followers' || data.pageType === 'network_following') {
             const d = parseResult.data;
             summary = {
                 connectionCount: Array.isArray(d.connections) ? d.connections.length : 0,
