@@ -19,6 +19,7 @@ const pageTypeEnum = z.enum([
     'analytics_profile_views',
     'profile_main',
     'network_connections',
+    'network_followers',
     'network_following',
     'feed'
 ]);

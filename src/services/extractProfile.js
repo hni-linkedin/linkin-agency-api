@@ -66,10 +66,11 @@ function parseExperienceEntryText(raw) {
 
 /**
  * @param {ReturnType<import('cheerio').load>} $
- * @returns {Object} Profile data for DB/API: profileName, headline, location, about, topSkills, experience; plus summary fields.
+ * @returns {Object} Profile data for DB/API: profileName, headline, location, about, topSkills, experience.
  */
 function extractProfile($) {
-    const allP = $('p.a47a5b30');
+    // Use all <p>; LinkedIn obfuscates classes (e.g. a47a5b30 → _2da93252)
+    const allP = $('p');
 
     // 1. Profile name – from <title> "Name | LinkedIn" or first prominent name
     let profileName = '';
@@ -140,10 +141,6 @@ function extractProfile($) {
         about: about || null,
         topSkills: topSkills || null,
         experience,
-        // Summary fields used by controller (may be filled by other captures)
-        postImpressions: null,
-        followers: null,
-        recentPosts: [],
     };
 }
 

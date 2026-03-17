@@ -21,17 +21,12 @@ Every capture stores `parsedData` in the DB with this top-level shape:
 
 ```ts
 data: {
-  name: string;           // from h1
-  headline: string;
-  location: string;
-  company: string;
-  followers: number;
-  connections: number | null;
-  about: string;
-  profileViews: number | null;
-  postImpressions: number | null;
-  searchApps: number | null;
-  recentPosts: any[];     // []
+  profileName: string | null;
+  headline: string | null;
+  location: string | null;
+  about: string | null;
+  topSkills: string | null;
+  experience: Array<{ heading: string; subheading: string; date: string }>;
 }
 ```
 
@@ -178,7 +173,8 @@ data: {
 
 ## 8. Other page types
 
-`network_connections`, `network_following`, `feed` (and any unknown type): parser returns **empty** `data: {}`.
+**`network_connections`**, **`network_followers`**, **`network_following`**: `extractConnections($)` — same shape: `{ connections: Array<{ name, headline, profileUrl, image }>, totalCount }`.  
+**`feed`** (and any unknown type): parser returns **empty** `data: {}`.
 
 ---
 
@@ -186,10 +182,12 @@ data: {
 
 | pageType | Main data keys |
 |----------|-----------------|
-| `profile_main` | `name`, `headline`, `followers`, `recentPosts` |
+| `profile_main` | `profileName`, `headline`, `location`, `about`, `topSkills`, `experience` |
 | `analytics_posts_impressions_*` | `impressions`, `members`, `top_posts` |
 | `analytics_posts_engagements_*` | `engagements`, `engagements_split`, `visitsToLinks`, `top_posts` |
 | `analytics_audience*` | `followers`, `insights` (experience, location, industry) |
 | `analytics_audience_demographics` | `job_title`, `location`, `industry`, `seniority`, `company_size`, `company` |
-| `analytics_search_appearances` | `totalAppearances`, `whereYouAppeared`, `topSearcherCompanies`, `topSearcherTitles`, `titlesFoundFor` |
+| `analytics_search_appearances_*` (where/companies/titles/found_for) | per-section keys (see above) |
 | `analytics_profile_views` | `totalViews`, `delta`, `viewers` |
+| `network_connections`, `network_followers`, `network_following` | `connections` (name, headline, profileUrl, image), `totalCount` |
+| `feed` | (empty) |
