@@ -11,6 +11,8 @@ const { extractSearchAppearancesFoundFor } = require('./extractSearchAppearances
 const { extractProfileViews } = require('./extractProfileViews');
 const { extractProfile } = require('./extractProfile');
 const { extractConnections } = require('./extractConnections');
+const { extractFollowers } = require('./extractFollowers');
+const { extractFollowing } = require('./extractFollowing');
 
 /**
  * 7.4 Parser Rules
@@ -71,9 +73,13 @@ const parseHtml = (htmlString, pageType) => {
                 result.data = extractProfileViews($);
                 break;
             case 'network_connections':
-            case 'network_followers':
-            case 'network_following':
                 result.data = extractConnections($);
+                break;
+            case 'network_followers':
+                result.data = extractFollowers($);
+                break;
+            case 'network_following':
+                result.data = extractFollowing($);
                 break;
             default:
                 // Other types returns empty data

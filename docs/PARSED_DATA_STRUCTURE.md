@@ -173,7 +173,9 @@ data: {
 
 ## 8. Other page types
 
-**`network_connections`**, **`network_followers`**, **`network_following`**: `extractConnections($)` — same shape: `{ connections: Array<{ name, headline, profileUrl, image }>, totalCount }`.  
+**`network_connections`**: `extractConnections($)` — `{ connections: Array<{ name, headline, profileUrl, image }>, totalCount }`.  
+**`network_followers`**: `extractFollowers($)` — `{ followers: Array<{ image, name, heading, profileUrl }> }`.  
+**`network_following`**: `extractFollowing($)` — `{ following: Array<{ image, name, heading, profileUrl }> }`.  
 **`feed`** (and any unknown type): parser returns **empty** `data: {}`.
 
 ---
@@ -189,5 +191,7 @@ data: {
 | `analytics_audience_demographics` | `job_title`, `location`, `industry`, `seniority`, `company_size`, `company` |
 | `analytics_search_appearances_*` (where/companies/titles/found_for) | per-section keys (see above) |
 | `analytics_profile_views` | `totalViews`, `delta`, `viewers` |
-| `network_connections`, `network_followers`, `network_following` | `connections` (name, headline, profileUrl, image), `totalCount` |
+| `network_connections` | `connections` (name, headline, profileUrl, image), `totalCount` |
+| `network_followers` | `followers` (image, name, heading, profileUrl) |
+| `network_following` | `following` (image, name, heading, profileUrl) |
 | `feed` | (empty) |

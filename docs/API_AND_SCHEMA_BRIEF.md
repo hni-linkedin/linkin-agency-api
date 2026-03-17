@@ -65,8 +65,8 @@ All `/api/capture` routes require API key (e.g. `x-api-key` header).
 | **analytics_search_appearances** | `totalAppearances`, `delta`, `whereYouAppeared: { posts, networkRecommendations, comments, search }`, `topSearcherCompanies[]`, `topSearcherTitles[]`, `titlesFoundFor[]` — companies items `{ label, image }`, titles `{ label }` |
 | **analytics_profile_views** | `totalViews`, `delta`, `viewers[]: { name, headline, avatar }` |
 | **network_connections** | `connections[]` (name, headline, profileUrl, image), `totalCount` |
-| **network_followers** | Same as network_connections (people who follow you) |
-| **network_following** | Same as network_connections (accounts you follow) |
+| **network_followers** | `followers[]` (image, name, heading, profileUrl) — people who follow you |
+| **network_following** | `following[]` (image, name, heading, profileUrl) — accounts you follow |
 | **feed** | `data: {}` (no parsing) |
 
 ---
