@@ -15,6 +15,7 @@
 | GET | `/api/capture/engagements/:clientId` | API key | Engagements captures for client |
 | GET | `/api/capture/audience/:clientId` | API key | Audience (followers) captures |
 | GET | `/api/capture/demographics/:clientId` | API key | Search-appearances (demographics) captures |
+| GET | `/api/capture/audience-demographics/:clientId` | API key | Audience demographics (`analytics_audience_demographics`) parsed data (`data`) |
 | GET | `/api/capture/summary/:clientId` | API key | Dashboard summary: latest profile, impressions 7d/28d, engagements 28d, audience, search, profile views |
 | GET | `/api/capture/home/:clientId` | API key | Home: summary (full parsedData.data per type) + freshness — **exact shape in §5** |
 | DELETE | `/api/capture/:id` | API key | Soft-delete capture |
@@ -193,7 +194,7 @@ const getHomeDataByClient = async (req, res, next) => {
 }
 ```
 
-**Important:** Every `summary.*` value (except `lastCapturedAt`) is the **full** `parsedData.data` for that page type (see §3). No separate `historicalImpressions`; use `summary.impressions7d` / `impressions90d` for full impressions data including `members` and `top_posts`.
+**Important:** Every `summary.*` value (except `lastCapturedAt`) is the **full** `parsedData.data` for that page type (see §3), *except* `summary.profile`, which is intentionally reduced to `{ name, headline }` for payload size.
 
 ---
 
@@ -201,16 +202,12 @@ const getHomeDataByClient = async (req, res, next) => {
 
 When a capture doesn’t exist for that type, the key is `null`. When it exists, the value has one of these shapes (same as in §3).
 
-**`summary.profile`** (pageType: `profile_main`):
+**`summary.profile`** (pageType: `profile_main` reduced):
 
 ```json
 {
-  "profileName": "string",
-  "headline": "",
-  "location": "",
-  "about": "",
-  "topSkills": "",
-  "experience": []
+  "name": "string",
+  "headline": ""
 }
 ```
 

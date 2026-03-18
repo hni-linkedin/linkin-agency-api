@@ -12,6 +12,7 @@ const {
     getEngagementsByClient,
     getAudienceByClient,
     getDemographicsByClient,
+    getAudienceDemographicsByClient,
     getSummaryByClient,
     getHomeDataByClient,
     deleteCapture
@@ -29,6 +30,7 @@ router.get('/impressions/:clientId', getImpressionsByClient);
 router.get('/engagements/:clientId', getEngagementsByClient);
 router.get('/audience/:clientId', getAudienceByClient);
 router.get('/demographics/:clientId', getDemographicsByClient);
+router.get('/audience-demographics/:clientId', getAudienceDemographicsByClient);
 router.get('/summary/:clientId', getSummaryByClient);
 router.get('/home/:clientId', getHomeDataByClient);
 router.delete('/:id', deleteCapture);
