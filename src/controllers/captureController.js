@@ -386,6 +386,35 @@ const getDemographicsByClient = async (req, res, next) => {
     }
 };
 
+// GET /api/capture/audience-demographics/:clientId
+// Latest analytics_audience_demographics parsed data for the frontend.
+const getAudienceDemographicsByClient = async (req, res, next) => {
+    try {
+        const capture = await Capture.findOne({
+            clientId: req.params.clientId,
+            pageType: 'analytics_audience_demographics',
+            deleted: false
+        })
+            // Keep response focused; omit large/raw storage fields.
+            .select('clientId clientName pageType capturedAt tabUrl parsedData parseSuccess')
+            .sort({ capturedAt: -1 });
+
+        if (!capture) {
+            return res.status(404).json({ success: false, error: 'Audience demographics capture not found' });
+        }
+
+        res.json({
+            success: true,
+            // Backward-compatible: `data` is only the parsedData.data payload.
+            data: capture.parsedData?.data || null,
+            capturedAt: capture.capturedAt,
+            captureId: capture._id,
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
 // GET /api/capture/summary/:clientId
 const getSummaryByClient = async (req, res, next) => {
     try {
@@ -515,7 +544,14 @@ const getHomeDataByClient = async (req, res, next) => {
             : null;
 
         const summary = {
-            profile: profile?.parsedData?.data || null,
+            // Home summary keeps `profile` small to reduce payload size.
+            // Parser output uses `profileName`; frontend wants `{ name, headline }`.
+            profile: profile?.parsedData?.data
+                ? {
+                    name: profile.parsedData.data.profileName ?? null,
+                    headline: profile.parsedData.data.headline ?? null
+                }
+                : null,
             impressions7d: stripTopPosts(impressions7d?.parsedData?.data),
             impressions28d: stripTopPosts(impressions28d?.parsedData?.data),
             impressions90d: stripTopPosts(impressions90d?.parsedData?.data),
@@ -570,6 +606,7 @@ module.exports = {
     getEngagementsByClient,
     getAudienceByClient,
     getDemographicsByClient,
+    getAudienceDemographicsByClient,
     getSummaryByClient,
     getHomeDataByClient,
     deleteCapture
