@@ -146,20 +146,42 @@ const createCapture = async (req, res, next) => {
 // GET /api/capture
 const listCaptures = async (req, res, next) => {
     try {
-        const { page = 1, limit = 10, clientId, pageType } = req.query;
+        const { page = 1, limit = 10, offset, clientId, pageType } = req.query;
 
         const query = { deleted: false };
         if (clientId) query.clientId = clientId;
         if (pageType) query.pageType = pageType;
 
+        const parsePositiveInt = (v) => {
+            const n = parseInt(v, 10);
+            return Number.isFinite(n) && n > 0 ? n : null;
+        };
+
+        const parseNonNegativeInt = (v) => {
+            const n = parseInt(v, 10);
+            return Number.isFinite(n) && n >= 0 ? n : null;
+        };
+
+        const limitNum = parsePositiveInt(limit);
+        const offsetNum = parseNonNegativeInt(offset);
+        const pageNum = parsePositiveInt(page);
+
+        // If offset is provided, it takes precedence over page-based calculation.
+        const effectiveSkip =
+            offsetNum !== null
+                ? offsetNum
+                : (pageNum !== null && limitNum !== null ? (pageNum - 1) * limitNum : 0);
+
         const captures = await Capture.find(query)
+            .select('-parsedData -agentVersion -cloudinaryUrl -cloudinaryId')
             .sort({ capturedAt: -1 })
-            .skip((page - 1) * limit)
-            .limit(parseInt(limit));
+            .skip(effectiveSkip)
+            .limit(limitNum || 10);
 
         const total = await Capture.countDocuments(query);
 
-        res.json({ success: true, count: captures.length, total, data: captures });
+        // `count` should represent the total number of matching docs (no pagination)
+        res.json({ success: true, count: total, total, data: captures });
     } catch (error) {
         next(error);
     }
@@ -168,7 +190,8 @@ const listCaptures = async (req, res, next) => {
 // GET /api/capture/:id
 const getCaptureById = async (req, res, next) => {
     try {
-        const capture = await Capture.findOne({ _id: req.params.id, deleted: false });
+        const capture = await Capture.findOne({ _id: req.params.id, deleted: false })
+            .select('-parsedData -agentVersion -cloudinaryUrl -cloudinaryId');
         if (!capture) {
             return res.status(404).json({ success: false, error: 'Capture not found' });
         }
@@ -206,7 +229,7 @@ const getProfileByClient = async (req, res, next) => {
 const getCapturesByClient = async (req, res, next) => {
     try {
         const { clientId } = req.params;
-        const { pageType, groupBy, latestOnly } = req.query;
+        const { pageType, groupBy, latestOnly, page, limit, offset } = req.query;
 
         // Base filter
         let filter = { clientId, deleted: false };
@@ -214,8 +237,37 @@ const getCapturesByClient = async (req, res, next) => {
             filter.pageType = pageType;
         }
 
+        const parsePositiveInt = (v) => {
+            const n = parseInt(v, 10);
+            return Number.isFinite(n) && n > 0 ? n : null;
+        };
+
+        const parseNonNegativeInt = (v) => {
+            const n = parseInt(v, 10);
+            return Number.isFinite(n) && n >= 0 ? n : null;
+        };
+
+        const pageNum = parsePositiveInt(page);
+        const limitNum = parsePositiveInt(limit);
+        const offsetNum = parseNonNegativeInt(offset);
+
+        const skipVal =
+            offsetNum !== null && limitNum !== null
+                ? offsetNum
+                : (pageNum !== null && limitNum !== null ? (pageNum - 1) * limitNum : null);
+
+        const hasPagination = skipVal !== null;
+
         // Handle GroupBy PageType (for Freshness Map)
         if (groupBy === 'pageType') {
+            // Total number of groups (distinct pageType), without skip/limit
+            const countResult = await Capture.aggregate([
+                { $match: filter },
+                { $group: { _id: '$pageType' } },
+                { $count: 'count' }
+            ]);
+            const totalGroups = countResult?.[0]?.count ?? 0;
+
             const pipeline = [
                 { $match: filter },
                 { $sort: { capturedAt: -1 } },
@@ -225,21 +277,39 @@ const getCapturesByClient = async (req, res, next) => {
                         latestCapture: { $first: '$$ROOT' }
                     }
                 },
-                { $replaceRoot: { newRoot: '$latestCapture' } }
+                { $replaceRoot: { newRoot: '$latestCapture' } },
+                { $sort: { capturedAt: -1 } }
             ];
 
+            // Ensure grouped response doesn't include large/undesired fields
+            pipeline.push({ $project: { parsedData: 0, agentVersion: 0, cloudinaryUrl: 0, cloudinaryId: 0 } });
+
+            if (hasPagination) {
+                pipeline.push({ $skip: skipVal });
+                pipeline.push({ $limit: limitNum });
+            }
+
             const captures = await Capture.aggregate(pipeline);
-            return res.json({ success: true, count: captures.length, data: captures });
+            // `count` should represent the total number of groups (no pagination)
+            return res.json({ success: true, count: totalGroups, data: captures });
         }
 
         // Standard fetch
-        const query = Capture.find(filter).sort({ capturedAt: -1 });
+        // Total number of matching docs (no pagination)
+        const totalMatches = await Capture.countDocuments(filter);
+
+        const query = Capture.find(filter)
+            .select('-parsedData -agentVersion -cloudinaryUrl -cloudinaryId')
+            .sort({ capturedAt: -1 });
         if (latestOnly === 'true') {
             query.limit(1);
+        } else if (hasPagination) {
+            query.skip(skipVal).limit(limitNum);
         }
 
         const captures = await query.exec();
-        res.json({ success: true, count: captures.length, data: captures });
+        // `count` represents total matches, while `data` is just the current page slice
+        res.json({ success: true, count: totalMatches, data: captures });
     } catch (error) {
         next(error);
     }
@@ -252,7 +322,9 @@ const getImpressionsByClient = async (req, res, next) => {
             clientId: req.params.clientId,
             pageType: { $regex: /impressions/ },
             deleted: false
-        }).sort({ capturedAt: -1 });
+        })
+            .select('-parsedData -agentVersion -cloudinaryUrl -cloudinaryId')
+            .sort({ capturedAt: -1 });
         res.json({ success: true, count: captures.length, data: captures });
     } catch (error) {
         next(error);
@@ -266,7 +338,9 @@ const getEngagementsByClient = async (req, res, next) => {
             clientId: req.params.clientId,
             pageType: { $regex: /engagements/ },
             deleted: false
-        }).sort({ capturedAt: -1 });
+        })
+            .select('-parsedData -agentVersion -cloudinaryUrl -cloudinaryId')
+            .sort({ capturedAt: -1 });
         res.json({ success: true, count: captures.length, data: captures });
     } catch (error) {
         next(error);
@@ -280,7 +354,9 @@ const getAudienceByClient = async (req, res, next) => {
             clientId: req.params.clientId,
             pageType: 'analytics_audience',
             deleted: false
-        }).sort({ capturedAt: -1 });
+        })
+            .select('-parsedData -agentVersion -cloudinaryUrl -cloudinaryId')
+            .sort({ capturedAt: -1 });
         res.json({ success: true, count: captures.length, data: captures });
     } catch (error) {
         next(error);
@@ -301,7 +377,9 @@ const getDemographicsByClient = async (req, res, next) => {
             clientId: req.params.clientId,
             pageType: { $in: SEARCH_APPEARANCE_PAGE_TYPES },
             deleted: false
-        }).sort({ capturedAt: -1 });
+        })
+            .select('-parsedData -agentVersion -cloudinaryUrl -cloudinaryId')
+            .sort({ capturedAt: -1 });
         res.json({ success: true, count: captures.length, data: captures });
     } catch (error) {
         next(error);
@@ -377,7 +455,9 @@ const getHomeDataByClient = async (req, res, next) => {
                     latestCapture: { $first: '$$ROOT' }
                 }
             },
-            { $replaceRoot: { newRoot: '$latestCapture' } }
+            { $replaceRoot: { newRoot: '$latestCapture' } },
+            // Reduce payload size: don't send parsedData / agentVersion in freshness panel
+            { $project: { parsedData: 0, agentVersion: 0, cloudinaryUrl: 0, cloudinaryId: 0 } }
         ];
 
         // Fetch everything in parallel; search = 4 section types
