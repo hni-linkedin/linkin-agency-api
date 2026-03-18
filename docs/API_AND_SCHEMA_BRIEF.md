@@ -8,9 +8,9 @@
 |--------|----------|------|---------|
 | GET | `/health` | No | Health check `{ status, uptime }` |
 | POST | `/api/capture` | API key | Create capture: upload HTML + metadata → parse → store in DB + Cloudinary |
-| GET | `/api/capture` | API key | List captures. Query: `clientId`, `pageType`, `page`, `limit` |
+| GET | `/api/capture` | API key | List captures (offset pagination). Response `count` = total matches, `data` = page slice |
 | GET | `/api/capture/:id` | API key | One capture by ID |
-| GET | `/api/capture/client/:clientId` | API key | Captures for client. Query: `pageType`, `groupBy=pageType`, `latestOnly` |
+| GET | `/api/capture/client/:clientId` | API key | Captures for client (offset pagination). Response `count` = total matches (or total groups for `groupBy=pageType`), `data` = page slice |
 | GET | `/api/capture/impressions/:clientId` | API key | Impressions captures (7d/28d/90d) for client |
 | GET | `/api/capture/engagements/:clientId` | API key | Engagements captures for client |
 | GET | `/api/capture/audience/:clientId` | API key | Audience (followers) captures |
