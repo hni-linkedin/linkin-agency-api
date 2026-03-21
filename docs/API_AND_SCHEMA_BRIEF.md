@@ -11,6 +11,7 @@
 | GET | `/api/capture` | API key | List captures (offset pagination). Response `count` = total matches, `data` = page slice |
 | GET | `/api/capture/:id` | API key | One capture by ID |
 | GET | `/api/capture/client/:clientId` | API key | Captures for client (offset pagination). Response `count` = total matches (or total groups for `groupBy=pageType`), `data` = page slice |
+| GET | `/api/capture/profile/:clientId` | API key | Latest **`profile_main`** capture: full `parsedData.data` (incl. `profileImage`, `bannerImage`, `profileName`, `headline`, … — see §3). Response: `{ success, data, capturedAt, captureId }` |
 | GET | `/api/capture/connections/:clientId` | API key | Latest `network_connections` capture: paginate `connections[]` (`page`, `limit`, `offset` — same rules as list captures). `count`/`total` = list length |
 | GET | `/api/capture/followers/:clientId` | API key | Latest `network_followers` capture: paginate `followers[]` |
 | GET | `/api/capture/following/:clientId` | API key | Latest `network_following` capture: paginate `following[]` |
@@ -62,7 +63,7 @@ All `/api/capture` and `/api/network` routes require API key (e.g. `x-api-key` h
 
 | pageType | `parsedData.data` shape (brief) |
 |----------|----------------------------------|
-| **profile_main** | `profileName`, `headline`, `location`, `about`, `topSkills`, `experience[]` |
+| **profile_main** | `profileName`, `headline`, `location`, `about`, `topSkills`, `experience[]`, `profileImage`, `bannerImage` |
 | **analytics_posts_impressions_7d / 28d / 90d** | `impressions: { totalImpression, deltaChange, deltaColor }`, `members: { totalMembersReached?, deltaChange?, deltaColor? }`, `top_posts[]` (postDescription, engagementsCount, commentsCount, impressionsStat, impressionDeltaLabel, impressionDeltaColor) |
 | **analytics_posts_engagements_7d / 28d / 90d** | `engagements: { totalEngagements, deltaChange, deltaColor }`, `engagements_split: { reactions?, comments?, reposts?, saves?, sendsOnLinkedIn? }`, `visitsToLinks`, `top_posts[]` (same shape as impressions) |
 | **analytics_audience** (+ _7d/_28d/_90d) | `followers: { totalFollowers, deltaChange, deltaColor }`, `insights: { experience, location, industry }` each `{ name, percentage }` |
