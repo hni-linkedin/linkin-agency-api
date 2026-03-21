@@ -1,7 +1,7 @@
 const logger = require('../utils/logger');
 const multer = require('multer');
 
-const errorHandler = (err, req, res, next) => {
+const errorHandler = (err, req, res, _next) => {
     logger.error(err.message, err.stack);
 
     // If error has a specific status assigned by us (like 422 from fileFilter)

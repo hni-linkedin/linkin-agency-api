@@ -46,8 +46,8 @@ const extractSearchAppearancesFoundFor = ($) => {
         if (!Number.isFinite(percentage) || percentage <= 0 || percentage > 100) return;
 
         let title = raw.replace(m[0], '');
-        title = title.replace(/^[\*\u2022\-\u00B7]+/, '');
-        title = title.replace(/[\u2022\u00B7\|]+/g, ' ');
+        title = title.replace(/^[*•\-\u00B7]+/, '');
+        title = title.replace(/[\u2022\u00B7|]+/g, ' ');
         title = title.replace(/\s+/g, ' ').trim();
 
         if (!title || title.length < 2 || title.length > 120) return;
