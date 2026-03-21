@@ -27,6 +27,8 @@ data: {
   about: string | null;
   topSkills: string | null;
   experience: Array<{ heading: string; subheading: string; date: string }>;
+  profileImage: string | null;  // avatar URL (prefer scale_400_400)
+  bannerImage: string | null;   // cover / banner URL
 }
 ```
 
@@ -184,7 +186,7 @@ data: {
 
 | pageType | Main data keys |
 |----------|-----------------|
-| `profile_main` | `profileName`, `headline`, `location`, `about`, `topSkills`, `experience` |
+| `profile_main` | `profileName`, `headline`, `location`, `about`, `topSkills`, `experience`, `profileImage`, `bannerImage` |
 | `analytics_posts_impressions_*` | `impressions`, `members`, `top_posts` |
 | `analytics_posts_engagements_*` | `engagements`, `engagements_split`, `visitsToLinks`, `top_posts` |
 | `analytics_audience*` | `followers`, `insights` (experience, location, industry) |

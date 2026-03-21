@@ -1,6 +1,6 @@
 /**
  * LinkedIn profile HTML parser (Cheerio).
- * Extracts: profileName, headline, location, about, topSkills, experience.
+ * Extracts: profileName, headline, location, about, topSkills, experience, profileImage, bannerImage.
  * Used for pageType: profile_main; result stored in Capture.parsedData and returned in summary/home.
  */
 
@@ -65,8 +65,47 @@ function parseExperienceEntryText(raw) {
 }
 
 /**
+ * Profile banner (cover) and avatar URLs from saved LinkedIn HTML.
+ * Cover: img[alt="Cover photo"] or figure[aria-label="Cover photo"] img or src contains profile-displaybackgroundimage
+ * Avatar: prefer profile-displayphoto-scale_400_400, else first profile-displayphoto (excl. logos/feed/video)
+ *
  * @param {ReturnType<import('cheerio').load>} $
- * @returns {Object} Profile data for DB/API: profileName, headline, location, about, topSkills, experience.
+ * @returns {{ profileImage: string | null, bannerImage: string | null }}
+ */
+function extractProfileMedia($) {
+    let bannerImage = null;
+    let coverEl = $('img[alt="Cover photo"]').first();
+    if (!coverEl.length) {
+        coverEl = $('figure[aria-label="Cover photo"] img').first();
+    }
+    if (!coverEl.length) {
+        coverEl = $('img[src*="profile-displaybackgroundimage"]').first();
+    }
+    if (coverEl.length) {
+        const src = (coverEl.attr('src') || '').trim();
+        bannerImage = src || null;
+    }
+
+    let profileImage = null;
+    const prefer400 = $('img[src*="profile-displayphoto-scale_400_400"]').first();
+    if (prefer400.length) {
+        profileImage = (prefer400.attr('src') || '').trim() || null;
+    } else {
+        $('img[src*="profile-displayphoto"]').each((_, el) => {
+            if (profileImage) return;
+            const src = ($(el).attr('src') || '').trim();
+            if (!src) return;
+            if (src.includes('company-logo') || src.includes('feedshare') || src.includes('videocover')) return;
+            profileImage = src;
+        });
+    }
+
+    return { profileImage, bannerImage };
+}
+
+/**
+ * @param {ReturnType<import('cheerio').load>} $
+ * @returns {Object} Profile data for DB/API (incl. profileImage, bannerImage).
  */
 function extractProfile($) {
     // Use all <p>; LinkedIn obfuscates classes (e.g. a47a5b30 → _2da93252)
@@ -134,6 +173,8 @@ function extractProfile($) {
         experience.push(parseExperienceEntryText(raw));
     });
 
+    const { profileImage, bannerImage } = extractProfileMedia($);
+
     return {
         profileName: profileName || null,
         headline: headline || null,
@@ -141,10 +182,13 @@ function extractProfile($) {
         about: about || null,
         topSkills: topSkills || null,
         experience,
+        profileImage,
+        bannerImage,
     };
 }
 
 module.exports = {
     extractProfile,
+    extractProfileMedia,
     parseExperienceEntryText,
 };
