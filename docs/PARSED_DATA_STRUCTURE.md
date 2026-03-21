@@ -174,8 +174,8 @@ data: {
 ## 8. Other page types
 
 **`network_connections`**: `extractConnections($)` — `{ connections: Array<{ name, headline, profileUrl, image }>, totalCount }`.  
-**`network_followers`**: `extractFollowers($)` — `{ followers: Array<{ image, name, heading, profileUrl }> }`.  
-**`network_following`**: `extractFollowing($)` — `{ following: Array<{ image, name, heading, profileUrl }> }`.  
+**`network_followers`**: `extractFollowers($)` — `{ followers: Array<...>, totalCount: number | null }` (total from heading text like `1,030 people are following you`, else `X followers` / `X+ followers` in page text).
+**`network_following`**: `extractFollowing($)` — `{ following: Array<...>, totalCount: number | null }` (total from heading text like `You are following 122 people out of your network`, else `X following` / `X+ following` in page text).
 **`feed`** (and any unknown type): parser returns **empty** `data: {}`.
 
 ---

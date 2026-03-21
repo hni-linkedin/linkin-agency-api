@@ -3,6 +3,7 @@ const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const { createCorsOptions } = require('./config/cors');
 const captureRoutes = require('./routes/capture');
+const networkRoutes = require('./routes/network');
 const authRoutes = require('./routes/auth');
 const adminRoutes = require('./routes/admin');
 const managerRoutes = require('./routes/manager');
@@ -23,6 +24,7 @@ app.get('/health', (req, res) => {
 });
 
 app.use('/api/capture', captureRoutes);
+app.use('/api/network', networkRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/manager', managerRoutes);

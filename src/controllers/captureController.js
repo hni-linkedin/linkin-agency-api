@@ -1,4 +1,6 @@
 const { capturePayloadSchema } = require('../utils/validators');
+const { parseCaptureListPagination } = require('../utils/pagination');
+const { invalidateNetworkOverviewCache } = require('../services/networkOverviewService');
 const { uploadHtmlToCloudinary } = require('../services/cloudinaryService');
 const { parseHtml } = require('../services/parserService');
 const Capture = require('../models/Capture');
@@ -68,6 +70,12 @@ const createCapture = async (req, res, next) => {
         });
 
         await newCapture.save();
+
+        if (
+            ['network_connections', 'network_followers', 'network_following'].includes(data.pageType)
+        ) {
+            invalidateNetworkOverviewCache(data.clientId);
+        }
 
         // 5. Build summary
         let summary = {};
@@ -145,37 +153,19 @@ const createCapture = async (req, res, next) => {
 // GET /api/capture
 const listCaptures = async (req, res, next) => {
     try {
-        const { page = 1, limit = 10, offset, clientId, pageType } = req.query;
+        const { clientId, pageType } = req.query;
 
         const query = { deleted: false };
         if (clientId) query.clientId = clientId;
         if (pageType) query.pageType = pageType;
 
-        const parsePositiveInt = (v) => {
-            const n = parseInt(v, 10);
-            return Number.isFinite(n) && n > 0 ? n : null;
-        };
-
-        const parseNonNegativeInt = (v) => {
-            const n = parseInt(v, 10);
-            return Number.isFinite(n) && n >= 0 ? n : null;
-        };
-
-        const limitNum = parsePositiveInt(limit);
-        const offsetNum = parseNonNegativeInt(offset);
-        const pageNum = parsePositiveInt(page);
-
-        // If offset is provided, it takes precedence over page-based calculation.
-        const effectiveSkip =
-            offsetNum !== null
-                ? offsetNum
-                : (pageNum !== null && limitNum !== null ? (pageNum - 1) * limitNum : 0);
+        const { limitNum, effectiveSkip } = parseCaptureListPagination(req.query);
 
         const captures = await Capture.find(query)
             .select('-parsedData -agentVersion -cloudinaryUrl -cloudinaryId')
             .sort({ capturedAt: -1 })
             .skip(effectiveSkip)
-            .limit(limitNum || 10);
+            .limit(limitNum);
 
         const total = await Capture.countDocuments(query);
 
@@ -185,6 +175,64 @@ const listCaptures = async (req, res, next) => {
         next(error);
     }
 };
+
+/**
+ * Latest network_* capture for client; paginate the embedded array (connections | followers | following).
+ * Query: same as list captures — page, limit, offset (offset overrides page).
+ */
+const getNetworkListPaginated = async (req, res, next, pageType, arrayKey) => {
+    try {
+        const { clientId } = req.params;
+        const { limitNum, effectiveSkip } = parseCaptureListPagination(req.query);
+
+        const capture = await Capture.findOne({
+            clientId,
+            pageType,
+            deleted: false,
+        })
+            .sort({ capturedAt: -1 })
+            .select('parsedData.data capturedAt clientId clientName pageType parseSuccess');
+
+        if (!capture) {
+            return res.status(404).json({
+                success: false,
+                error: `No capture found for pageType "${pageType}"`,
+            });
+        }
+
+        const raw = capture.parsedData?.data || {};
+        const list = Array.isArray(raw[arrayKey]) ? raw[arrayKey] : [];
+        const total = list.length;
+        const data = list.slice(effectiveSkip, effectiveSkip + limitNum);
+
+        const payload = {
+            success: true,
+            count: total,
+            total,
+            data,
+            captureId: capture._id,
+            capturedAt: capture.capturedAt,
+            pageType,
+        };
+
+        if (pageType === 'network_connections' && raw.totalCount != null) {
+            payload.totalCount = raw.totalCount;
+        }
+
+        return res.json(payload);
+    } catch (error) {
+        return next(error);
+    }
+};
+
+const getConnectionsByClient = (req, res, next) =>
+    getNetworkListPaginated(req, res, next, 'network_connections', 'connections');
+
+const getFollowersNetworkByClient = (req, res, next) =>
+    getNetworkListPaginated(req, res, next, 'network_followers', 'followers');
+
+const getFollowingByClient = (req, res, next) =>
+    getNetworkListPaginated(req, res, next, 'network_following', 'following');
 
 // GET /api/capture/:id
 const getCaptureById = async (req, res, next) => {
@@ -601,6 +649,9 @@ module.exports = {
     listCaptures,
     getCaptureById,
     getProfileByClient,
+    getConnectionsByClient,
+    getFollowersNetworkByClient,
+    getFollowingByClient,
     getCapturesByClient,
     getImpressionsByClient,
     getEngagementsByClient,

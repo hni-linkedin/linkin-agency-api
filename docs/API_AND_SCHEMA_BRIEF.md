@@ -11,6 +11,9 @@
 | GET | `/api/capture` | API key | List captures (offset pagination). Response `count` = total matches, `data` = page slice |
 | GET | `/api/capture/:id` | API key | One capture by ID |
 | GET | `/api/capture/client/:clientId` | API key | Captures for client (offset pagination). Response `count` = total matches (or total groups for `groupBy=pageType`), `data` = page slice |
+| GET | `/api/capture/connections/:clientId` | API key | Latest `network_connections` capture: paginate `connections[]` (`page`, `limit`, `offset` — same rules as list captures). `count`/`total` = list length |
+| GET | `/api/capture/followers/:clientId` | API key | Latest `network_followers` capture: paginate `followers[]` |
+| GET | `/api/capture/following/:clientId` | API key | Latest `network_following` capture: paginate `following[]` |
 | GET | `/api/capture/impressions/:clientId` | API key | Impressions captures (7d/28d/90d) for client |
 | GET | `/api/capture/engagements/:clientId` | API key | Engagements captures for client |
 | GET | `/api/capture/audience/:clientId` | API key | Audience (followers) captures |
@@ -18,9 +21,10 @@
 | GET | `/api/capture/audience-demographics/:clientId` | API key | Audience demographics (`analytics_audience_demographics`) parsed data (`data`) |
 | GET | `/api/capture/summary/:clientId` | API key | Dashboard summary: latest profile, impressions 7d/28d, engagements 28d, audience, search, profile views |
 | GET | `/api/capture/home/:clientId` | API key | Home: summary (full parsedData.data per type) + freshness — **exact shape in §5** |
+| GET | `/api/network/overview/:clientId` | API key | Network overview: latest `network_*` captures, full people arrays, server-side analysis, 5‑min in-memory cache |
 | DELETE | `/api/capture/:id` | API key | Soft-delete capture |
 
-All `/api/capture` routes require API key (e.g. `x-api-key` header).
+All `/api/capture` and `/api/network` routes require API key (e.g. `x-api-key` header).
 
 ---
 
