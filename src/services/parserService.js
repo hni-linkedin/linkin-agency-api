@@ -95,22 +95,13 @@ const parseHtml = (htmlString, pageType) => {
     return result;
 };
 
-// --- Helper: Clean and parse number ---
-const parseNumber = (str) => {
-    if (!str) return null;
-    // Remove everything except numbers, dots, and minus signs
-    const cleaned = str.replace(/[^\d.-]/g, '');
-    const num = parseFloat(cleaned);
-    return isNaN(num) ? null : num;
-};
-
 // --- Parsers logic implementation ---
 
 const parseProfileMain = ($) => {
     return extractProfile($);
 };
 
-const parseAnalyticsPosts = ($, pageType) => {
+const parseAnalyticsPosts = ($, _pageType) => {
     return extractImpressions($);
 };
 

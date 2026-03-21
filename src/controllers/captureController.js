@@ -1,4 +1,3 @@
-const logger = require('../utils/logger');
 const { capturePayloadSchema } = require('../utils/validators');
 const { uploadHtmlToCloudinary } = require('../services/cloudinaryService');
 const { parseHtml } = require('../services/parserService');
@@ -530,7 +529,8 @@ const getHomeDataByClient = async (req, res, next) => {
 
         const stripTopPosts = (data) => {
             if (!data) return null;
-            const { top_posts, ...rest } = data;
+            const rest = { ...data };
+            delete rest.top_posts;
             return rest;
         };
 
