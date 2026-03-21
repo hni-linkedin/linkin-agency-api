@@ -7,7 +7,7 @@
 
 /**
  * @param {ReturnType<import('cheerio').load>} $
- * @returns {{ followers: Array<{ image: string | null, name: string, heading: string | null, profileUrl: string | null }> }}
+ * @returns {{ followers: Array<{ image: string | null, name: string, heading: string | null, profileUrl: string | null }>, totalCount: number | null }}
  */
 const extractFollowers = ($) => {
     const cards = $('[data-view-name="search-entity-result-universal-template"]');
@@ -47,7 +47,29 @@ const extractFollowers = ($) => {
         });
     });
 
-    return { followers };
+    let totalCount = null;
+    const bodyText = $.root().text();
+
+    // Network > Followers heading: "1,030 people are following you"
+    const followingYouMatch = bodyText.match(
+        /(\d[\d,]*)\s+people\s+are\s+following\s+you/i,
+    );
+    if (followingYouMatch) {
+        const num = parseInt(followingYouMatch[1].replace(/,/g, ''), 10);
+        if (!Number.isNaN(num)) totalCount = num;
+    }
+
+    if (totalCount === null) {
+        const countMatch =
+            bodyText.match(/(\d+,?\d*)\s*\+\s*followers?/i) ||
+            bodyText.match(/(\d+,?\d*)\s+followers?/i);
+        if (countMatch) {
+            const num = parseInt(countMatch[1].replace(/,/g, ''), 10);
+            if (!Number.isNaN(num)) totalCount = num;
+        }
+    }
+
+    return { followers, totalCount };
 };
 
 module.exports = { extractFollowers };

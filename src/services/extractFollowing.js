@@ -7,7 +7,7 @@
 
 /**
  * @param {ReturnType<import('cheerio').load>} $
- * @returns {{ following: Array<{ image: string | null, name: string, heading: string | null, profileUrl: string | null }> }}
+ * @returns {{ following: Array<{ image: string | null, name: string, heading: string | null, profileUrl: string | null }>, totalCount: number | null }}
  */
 const extractFollowing = ($) => {
     const cards = $('[data-view-name="search-entity-result-universal-template"]');
@@ -47,7 +47,29 @@ const extractFollowing = ($) => {
         });
     });
 
-    return { following };
+    let totalCount = null;
+    const bodyText = $.root().text();
+
+    // Network > Following heading: "You are following 122 people out of your network"
+    const followingOutOfNetworkMatch = bodyText.match(
+        /you\s+are\s+following\s+(\d[\d,]*)\s+people\s+out\s+of\s+your\s+network/i,
+    );
+    if (followingOutOfNetworkMatch) {
+        const num = parseInt(followingOutOfNetworkMatch[1].replace(/,/g, ''), 10);
+        if (!Number.isNaN(num)) totalCount = num;
+    }
+
+    if (totalCount === null) {
+        const countMatch =
+            bodyText.match(/(\d+,?\d*)\s*\+\s*following?/i) ||
+            bodyText.match(/(\d+,?\d*)\s+following?/i);
+        if (countMatch) {
+            const num = parseInt(countMatch[1].replace(/,/g, ''), 10);
+            if (!Number.isNaN(num)) totalCount = num;
+        }
+    }
+
+    return { following, totalCount };
 };
 
 module.exports = { extractFollowing };
